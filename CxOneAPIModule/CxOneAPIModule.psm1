@@ -47,6 +47,7 @@
     7.8        Added -UseBasicParsing switch to all Invoke-WebRequest and Invoke-RestMethod calls
     7.9        Added ReCalc Status field to scan object
     8.0        Updated serializer to allow for larger data sets
+    8.1        Bug fix
     
 .Description
     The following functions are available for this module
@@ -253,7 +254,7 @@ Function ApiCall() {
         [Parameter(Mandatory=$false)][switch]$noerror
     )
 
-    $CxOneConnObj.ValidateToken | Out-Null
+    $CxOneConnObj.ValidateToken() | Out-Null
 
     try {
         $response = Invoke-Command -Command $scriptBlock
@@ -800,7 +801,7 @@ class CxOneConnection {
         }
  
         Write-Verbose "Token Has expired, regenerating token"
-        $this.SetHeaders($this.IamUri, $this.IamUri, $this.ApiKey, $true)
+        $this.SetHeaders($this.IamUri, $this.Tenant, $this.ApiKey, $true)
         Write-Verbose "Token regenerated"
     }
     
