@@ -17,7 +17,13 @@ Has seperate tabs for
 - The CXOneAPIModule folder needs to be placed into the same location as the script in order to use the Scan ID function
 - Excel created is not saved and must be manually saved if required
 
-## Usage
+## Versions:
+- The ScanLogParser works on only on Windows machines with Excel installed. It contains full functionality
+- The ScanLogParser-ImportExcel uses the Powershell ImportExcel Module and can run on any system with Powershell available
+  - This version requires the ImportExcel Module to be installed before the first run
+  - only has the option to parse log a file using the logPath parameter
+
+## Usage - ScanLogParser
 ### Help
     .\ScanLogParser.ps1 -help [<CommonParameters>]
     
@@ -25,7 +31,14 @@ Has seperate tabs for
     .\ScanLogParser.ps1 [-logPath <string>] [<CommonParameters>]
 
 ### Parse Log from Checkmarx One Scan ID
-    .\ScanLogParser.ps1 -scanId <string> [-silentLogin -apiKey <string] [<CommonParameters>]
+    .\ScanLogParser.ps1 [-scanId <string>] [-silentLogin -apiKey <string] [<CommonParameters>]
+
+## Usage - ScanLogParser-ImportExcel
+### Help
+    .\ScanLogParser.ps1 -help [<CommonParameters>]
+    
+### Parse Log File
+    .\ScanLogParser.ps1 -logPath <string> [<CommonParameters>]
 
 ## Parameters
 __PARAMETER help__  
