@@ -22,6 +22,7 @@ Has seperate tabs for
 - The ScanLogParser-ImportExcel uses the Powershell ImportExcel Module and can run on any system with Powershell available
   - This version requires the ImportExcel Module to be installed before the first run
   - only has the option to parse log a file using the logPath parameter
+  - does not use the CXOneAPIModule
 
 ## Usage - ScanLogParser
 ### Help
