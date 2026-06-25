@@ -7,7 +7,7 @@
 
 .Notes   
     Version:     8.0
-    Date:        14/05/2026
+    Date:        24/06/2026
     Written by:  Michael Fowler
     Contact:     michael.fowler@checkmarx.com
     
@@ -48,6 +48,7 @@
     7.9        Added ReCalc Status field to scan object
     8.0        Updated serializer to allow for larger data sets
     8.1        Bug fix
+    8.2        Added try catch block to handle errors on duplicate scans returned by API
     
 .Description
     The following functions are available for this module
@@ -1404,7 +1405,10 @@ class Scans {
                 $this.TotalCount = $json.totalCount   
             }
 
-            foreach ($scan in $json.scans) { $this.ScansHash.Add($scan.id, [Scan]::new($scan)) }
+            foreach ($scan in $json.scans) { 
+                try { $this.ScansHash.Add($scan.id, [Scan]::new($scan)) } 
+                catch { Write-Output $scan }
+            } 
 
             Write-Verbose "$($this.Limit) Scans Retrieved with Offset: $($this.Offset)"
             $this.Offset += $this.Limit
