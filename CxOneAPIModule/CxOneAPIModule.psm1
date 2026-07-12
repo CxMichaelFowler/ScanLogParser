@@ -6,8 +6,8 @@
     This module has been created to simplify common tasks when scritpting for Checkmarx One
 
 .Notes   
-    Version:     8.0
-    Date:        24/06/2026
+    Version:     9.0
+    Date:        10/07/2026
     Written by:  Michael Fowler
     Contact:     michael.fowler@checkmarx.com
     
@@ -49,6 +49,7 @@
     8.0        Updated serializer to allow for larger data sets
     8.1        Bug fix
     8.2        Added try catch block to handle errors on duplicate scans returned by API
+    9.0        Added option to retrieve scanned languages. Only returns results where SAST engine is used
     
 .Description
     The following functions are available for this module
@@ -134,11 +135,13 @@
             Statuses = CSV of Scan statuses to filter results
                Valid Statuses are Queued, Running, Completed, Failed, Partial, Canceled
                If all Statuses are required use "All"
+            getLanguages = optional switch to get language metrics when sast engine used
         Parameters
             CxOneConnObj - Checkmarx One connection object
             statuses - CSV string of scan statuses to filter results
+            getLanguages - switch
         Example
-            $scans = Get-AllScans $conn "Completed","Partial"
+            $scans = Get-AllScans $conn "Completed","Partial" -getLanguages
             
     Get-ScansByDays
         Details
@@ -150,12 +153,14 @@
             ScanDays = Number of days to return scan for
                Must be a integer greater or equal to 0 
                0 will return all days
+            getLanguages = optional switch to get language metrics when sast engine used
         Parameters
             CxOneConnObj - Checkmarx One connection object
             Statuses - CSV string of scan statuses
             scanDays - Integer value between 0 and 366
+            getLanguages - switch
         Example
-            $scans = Get-ScansByDays $conn "All","Partial" 90
+            $scans = Get-ScansByDays $conn "All","Partial" 90 -getLanguages
 
     Get-ScansByDates
         Details
@@ -166,52 +171,61 @@
                If all Statuses are required use "All"
             fromDate = The starting date to return values for
             toDate = The last date to return values for
+            getLanguages = optional switch to get language metrics when sast engine used
 
         Parameters
             CxOneConnObj - Checkmarx One connection object
             Statuses - CSV string of scan statuses
             fromDate - Date string in the format yyyy-MM-dd
             toDate - Date string in the format yyyy-MM-dd
+            getLanguages - switch
         Example
-            $scans = Get-ScansByDates $conn "Completed","Partial" "2025-01-01" "2025-06-30"
+            $scans = Get-ScansByDates $conn "Completed","Partial" "2025-01-01" "2025-06-30" -getLanguages
    
     Get-ScansByProjects
         Details
             Function to get a hash scans for a provided hash of project objects
             Key = Scan ID and Value = Scan Object
+            getLanguages = optional switch to get language metrics when sast engine used
         Parameters
             CxOneConnObj - Checkmarx One connection object
             projectsHash - Hash of projects to return last of. Must be a hash as provided by call above
+            getLanguages - switch
         Example
-            $scans = Get-ScansByIds $conn $projects
+            $scans = Get-ScansByIds $conn $projects -getLanguages
 
     Get-ScansByIds
         Details
             Function to get a hash scans for a provided as a CSV string of Scan IDs
             Key = Scan ID and Value = Scan Object
+            getLanguages = optional switch to get language metrics when sast engine used
         Parameters
             CxOneConnObj - Checkmarx One connection object
             ScanIds - CSV string of scan IDs
+            getLanguages - switch
         Example
-            $scans = Get-ScansByIds $conn "4bf2d7fc-8a7c-420d-ac1a-7c62cebb7bbb,141cf46f-1781-45ab-8cee-0f5856337b2f"
+            $scans = Get-ScansByIds $conn "4bf2d7fc-8a7c-420d-ac1a-7c62cebb7bbb,141cf46f-1781-45ab-8cee-0f5856337b2f" -getLanguages
         
     Get-LastScans
         Details
             Get a hash of the the last scans for the projects provided in the projects hash.
             Key = Project ID and Value = Scan Object
             Optional switch to return last scan for Main Branch (if set)
+            getLanguages = optional switch to get language metrics when sast engine used
             Will return null object for projects with no scans
         Parameters
             CxOneConnObj - Checkmarx One connection object
             projectsHash - Hash of projects to return last of. Must be a hash as provided by call above
             useMainBranch - optional switch to specify only return last scan on Main branch (if set)
+            getLanguages - switch
         Example
-            $scans = Get-LastScans $conn $projects
+            $scans = Get-LastScans $conn $projects -getLanguages
             
     Get-LastScansForGivenBranches
         Details
             Get a hash of the last scan for the projects provided in the projects hash.
             Key = Project ID and Value = Scan Object
+            getLanguages = optional switch to get language metrics when sast engine used
             Returns last scan for the branch provided in the CSV file
             Will return null object for projects with no scans
             branchesCSV must be a file path to a CSV with the header Projects,Branches and one project,branch per line
@@ -219,8 +233,9 @@
             CxOneConnObj - Checkmarx One connection object
             projectsHash - Hash of projects to return last of. Must be a hash as provided by call above
             branchesCSV - file path to CSV file containing the mapping of projects to primary branch
+            getLanguages - switch
         Example
-            $scans = Get-LastScansForGivenBranches $conn $projects "C:\files\branches.csv"
+            $scans = Get-LastScansForGivenBranches $conn $projects "C:\files\branches.csv" -getLanguages
             
     Get-ScanResults
         Details
@@ -350,10 +365,13 @@ Function Get-AllScans {
 
         [Parameter(Mandatory=$true)]
         [ValidateSet("Queued", "Running", "Completed", "Failed", "Partial", "Canceled", "All", IgnoreCase = $false)]
-        [String[]]$statuses
+        [String[]]$statuses,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$getLanguages
     )
 
-    return ([Scans]::new($CxOneConnObj, $statuses -join ",")).ScansHash
+    return ([Scans]::new($CxOneConnObj, $statuses -join ",", $getLanguages)).ScansHash
 }
 
 #Get all scans filtered by CSV string of statuses and number of days to return. If all statuses are required "All" only for status
@@ -368,10 +386,13 @@ Function Get-ScansByDays {
 
         [Parameter(Mandatory=$true)]
         [ValidateRange(1,366)]
-        [Int]$scanDays
+        [Int]$scanDays,
+     
+        [Parameter(Mandatory=$false)]
+        [switch]$getLanguages
     )
     
-    return ([Scans]::new($CxOneConnObj, $statuses -join ",", $scanDays)).ScansHash
+    return ([Scans]::new($CxOneConnObj, $statuses -join ",", $scanDays, $getLanguages)).ScansHash
 }
 
 #Get all scans between two dates (inclusive) filtered by CSV string of statuses. If all statuses are required use "All" for status
@@ -390,14 +411,18 @@ Function Get-ScansByDates {
 
         [Parameter(Mandatory=$true)]
         [ValidatePattern('^\d{4}-\d{2}-\d{2}$')]
-        [String]$toDate
+        [String]$toDate,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$getLanguages
     )
       
     return [Scans]::new(
         $CxOneConnObj, 
         $statuses -join ",", 
         [uri]::EscapeDataString(([datetime]$fromDate).ToString("yyyy-MM-ddThh:mm:ss.fffffffZ")), 
-        [uri]::EscapeDataString(([datetime]$toDate).AddDays(1).AddSeconds(-1).ToString("yyyy-MM-ddThh:mm:ss.fffffffZ"))
+        [uri]::EscapeDataString(([datetime]$toDate).AddDays(1).AddSeconds(-1).ToString("yyyy-MM-ddThh:mm:ss.fffffffZ")),
+        $getLanguages
     ).ScansHash
 }
 
@@ -421,10 +446,13 @@ Function Get-ScansByIds {
         [CxOneConnection]$CxOneConnObj,
 
         [Parameter(Mandatory=$true)]
-        [String]$scanIds
+        [String]$scanIds,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$getLanguages
     )
     
-    return ([Scans]::new($CxOneConnObj, "All", $scanIds)).ScansHash
+    return ([Scans]::new($CxOneConnObj, "All", $scanIds, $getLanguages)).ScansHash
 }
 
 #Get the last scan for the projects provided in the projects hash. 
@@ -437,10 +465,13 @@ Function Get-LastScans {
         [System.Collections.Generic.Dictionary[String, Project]]$projectsHash,
 
         [Parameter(Mandatory=$false)]
-        [Switch]$useMainBranch
+        [Switch]$useMainBranch,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$getLanguages
     )
 
-    return ([Scans]::new($CxOneConnObj, $projectsHash, $useMainBranch, $null)).ScansHash
+    return ([Scans]::new($CxOneConnObj, $projectsHash, $useMainBranch, $null, $getLanguages)).ScansHash
 }
 
 #Get the last scan for the projects provided in the projects hash. Takes a filepath to a CSV containing the mapping of projects to branch 
@@ -454,10 +485,13 @@ Function Get-LastScansForGivenBranches {
 
         [Parameter(Mandatory=$true)]
         [AllowEmptyString()]
-        [String]$branchesCSV
+        [String]$branchesCSV,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$getLanguages
     )
 
-    return ([Scans]::new($CxOneConnObj, $projectsList, $false, $branchesCSV)).ScansHash
+    return ([Scans]::new($CxOneConnObj, $projectsList, $false, $branchesCSV, $getLanguages)).ScansHash
 }
 
 #Get the results for a given scan ID
@@ -468,10 +502,13 @@ Function Get-ScanResults {
 
         [Parameter(Mandatory=$true)]
         [AllowEmptyString()]
-        [String]$scanId
+        [String]$scanId,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$getLanguages
     )
 
-    return ([Results]::new($CxOneConnObj, $scanId)).ResultsList
+    return ([Results]::new($CxOneConnObj, $scanId, $getLanguages)).ResultsList
 }
 
 #Get the Severity Counters for the given list of scans. Returns a dictionary with key = ScanId and value = Severity Counter Object
@@ -1219,6 +1256,105 @@ Class Status {
     #------------------------------------------------------------------------------------------------------------------------------------------------
 }
 
+Class LanguageMetrics {
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Variables
+
+    [Int]$GoodFiles
+    [Int]$PartiallyGoodFiles
+    [Int]$BadFiles
+    [Int]$SuccessfullLoc
+    [Int]$FailedLoc
+
+    #endregion    
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Constructors
+
+    LanguageMetrics() {}
+
+    LanguageMetrics ([PSCustomObject]$metrics, [string]$language) { $this.SetVariables($metrics, [string]$language) }
+
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Hidden Methods
+
+    [void] Hidden SetVariables([PSCustomObject]$metrics, [string]$language) {      
+
+        Foreach ($lang in $metrics.successfullLocPerLanguage.PSObject.Properties) {
+            if ($lang.Name -eq $language) { $this.SuccessfullLoc = $lang.Value }
+        }
+
+        Foreach ($lang in $metrics.failedLocPerLanguage.PSObject.Properties) {
+            if ($lang.Name -eq $language) { $this.FailedLoc = $lang.Value }
+        }
+
+        Foreach ($lang in $metrics.scannedFilesPerLanguage.PSObject.Properties) { 
+            if ($lang.Name -eq $language) {
+                $this.GoodFiles = $lang.Value.goodFiles
+                $this.PartiallyGoodFiles = $lang.Value.partiallyGoodFiles
+                $this.BadFiles = $lang.Value.badFiles
+            }
+        } 
+    }           
+    #endregion    
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+}
+
+Class SastScanMetrics {
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Variables
+
+    [Int]$TotalScannedFilesCount
+    [Int]$TotalScannedLoc
+    [System.Collections.Generic.Dictionary[String, LanguageMetrics]]$ScannedLanguages
+    [String]$ScannedLanguagesString
+    [System.Collections.Generic.Dictionary[String, Int]]$DetectedButNotScannedLanguages
+    [String]$DetectedButNotScannedLanguagesString
+
+    #endregion    
+    #--------------------------------------------------------------------------------------------------------------------------------------
+    #region Constructors
+
+    SastScanMetrics() {}
+
+        SastScanMetrics ([PSCustomObject]$metrics) { $this.SetVariables($metrics) }
+
+    #endregion
+    #--------------------------------------------------------------------------------------------------------------------------------------
+    #region Hidden Methods
+
+    [void] Hidden SetVariables([PSCustomObject]$metrics) {
+        
+        $this.TotalScannedFilesCount = $metrics.totalScannedFilesCount
+        $this.TotalScannedLoc = $metrics.totalScannedLoc
+        
+        $this.ScannedLanguages = [System.Collections.Generic.Dictionary[String, LanguageMetrics]]::New()
+        try {
+            $this.ScannedLanguagesString = $null
+            Foreach ($lang in $metrics.successfullLocPerLanguage.PSObject.Properties) {               
+                if (-NOT ([string]::IsNullOrEmpty($this.ScannedLanguagesString))) { $this.ScannedLanguagesString += ";" }
+                $this.ScannedLanguages.add($lang.name, [LanguageMetrics]::new($metrics, $lang.name))
+                $this.ScannedLanguagesString += $lang.name
+            }
+        }
+        catch {}
+
+        $this.DetectedButNotScannedLanguages = [System.Collections.Generic.Dictionary[String, Int]]::New()
+        try {
+            $this.DetectedButNotScannedLanguagesString = $null
+            Foreach ($lang in $metrics.fileCountOfDetectedButNotScannedLanguages.PSObject.Properties) {
+                if (-NOT ([string]::IsNullOrEmpty($this.DetectedButNotScannedLanguagesString))) { $this.DetectedButNotScannedLanguagesString += ";" }
+                $this.DetectedButNotScannedLanguagesString += $lang.Name
+                $this.DetectedButNotScannedLanguages.Add($lang.Name, $lang.Value)
+            }
+        }
+        catch {}
+    }
+    
+    #endregion    
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+}
+
 Class Scan {
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Variables
@@ -1244,6 +1380,7 @@ Class Scan {
     [String]$SourceType
     [String]$SourceOrigin
     [String]$RecalcStatus
+    [SastScanMetrics]$SastScanMetrics
 
     #endregion    
     #--------------------------------------------------------------------------------------------------------------------------------------
@@ -1339,45 +1476,51 @@ class Scans {
     #Get All Scans
     Scans() {}
     
-    #Get scnas with no filters
-    Scans([CxOneConnection]$conn) { $this.GetScansHash($conn, $null, $null, $null, $null) }
+    #Get scans with no filters
+    Scans([CxOneConnection]$conn, [switch]$getLanguages) { $this.GetScansHash($conn, $null, $null, $null, $null) }
 
     #Get Last scans for given hash of projects with option to filter by main branch
     Scans([CxOneConnection]$conn, [System.Collections.Generic.Dictionary[String, Project]]$projectsHash, 
-          [Switch]$useMainBranch, [String]$branchesCSV) { 
-        $this.GetLastScansHash($conn , $projectsHash, $useMainBranch, $branchesCSV)
+          [Switch]$useMainBranch, [String]$branchesCSV, [switch]$getLanguages) { 
+        $this.GetLastScansHash($conn , $projectsHash, $useMainBranch, $branchesCSV, $getLanguages)
     }
        
     #Get List of scans filtered by status
-    Scans([CxOneConnection]$conn, [String]$statuses) { $this.GetScansHash($conn, $statuses, $null, $null, $null, $null) }
+    Scans([CxOneConnection]$conn, [String]$statuses, [switch]$getLanguages) { 
+        $this.GetScansHash($conn, $statuses, $null, $null, $null, $null, $getLanguages) 
+    }
     
     #Get List of scans filtered by statuses and Scan Ids
-    Scans([CxOneConnection]$conn, [String]$statuses, [String]$scanIds) { $this.GetScansHash($conn, $statuses, $null, $null, $scanIds, $null) }
+    Scans([CxOneConnection]$conn, [String]$statuses, [String]$scanIds, [switch]$getLanguages) { 
+        $this.GetScansHash($conn, $statuses, $null, $null, $scanIds, $null, $getLanguages) 
+    }
     
     #Get List of scans filtered by statuses and Projects Hash
-    Scans([CxOneConnection]$conn, [String]$statuses, [System.Collections.Generic.Dictionary[String, Project]]$projectsHash) { 
-        $this.GetScansHash($conn, $statuses, $null, $null, $null, $projectsHash) 
+    Scans([CxOneConnection]$conn, [String]$statuses, [System.Collections.Generic.Dictionary[String, Project]]$projectsHash, [switch]$getLanguages) { 
+        $this.GetScansHash($conn, $statuses, $null, $null, $null, $projectsHash, $getLanguages) 
     }
 
     #Get List of scans filitered by statuses and number of days
-    Scans([CxOneConnection]$conn, [String]$statuses, [Int]$scanDays) { $this.GetScansHashByDays($conn, $statuses, $scanDays, $null) }
+    Scans([CxOneConnection]$conn, [String]$statuses, [Int]$scanDays, [switch]$getLanguages) { 
+        $this.GetScansHashByDays($conn, $statuses, $scanDays, $null, $getLanguages) 
+    }
 
     #Get List of scans filitered by statuses between two dates
-    Scans([CxOneConnection]$conn, [String]$statuses, [string]$fromDate, [string]$toDate) { 
-        $this.GetScansHash($conn, $statuses, $fromDate, $toDate, $null, $null) 
+    Scans([CxOneConnection]$conn, [String]$statuses, [string]$fromDate, [string]$toDate, [switch]$getLanguages) { 
+        $this.GetScansHash($conn, $statuses, $fromDate, $toDate, $null, $null, $getLanguages) 
     }
     
     #endregion
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Hidden Methods
     
-    [void] Hidden GetScansHashByDays([CxOneConnection]$conn, [String]$statuses, [Int]$scanDays, [String]$scanIds) {
+    [void] Hidden GetScansHashByDays([CxOneConnection]$conn, [String]$statuses, [Int]$scanDays, [String]$scanIds, [switch]$getLanguages) {
         $fromDate = [uri]::EscapeDataString(([datetime]::Today).AddDays(-$scanDays).ToString("yyyy-MM-ddThh:mm:ss.fffffffZ"))
-        $this.GetScansHash($conn, $statuses, $fromDate, $null, $null, $null)
+        $this.GetScansHash($conn, $statuses, $fromDate, $null, $null, $null, [switch]$getLanguages)
     } 
     
     [void] Hidden GetScansHash([CxOneConnection]$conn, [String]$statuses, [string]$fromDate, [string]$toDate, 
-                               [String]$scanIds, [System.Collections.Generic.Dictionary[String, Project]]$projectsHash) {
+                               [String]$scanIds, [System.Collections.Generic.Dictionary[String, Project]]$projectsHash, [switch]$getLanguages) {
         
         Write-Verbose "Retrieving scans"
 
@@ -1406,8 +1549,13 @@ class Scans {
             }
 
             foreach ($scan in $json.scans) { 
-                try { $this.ScansHash.Add($scan.id, [Scan]::new($scan)) } 
-                catch { Write-Output $scan }
+                $scanObj = [Scan]::new($scan)
+                $this.ScansHash.Add($scan.id, $scanObj)
+                if ($getLanguages -AND ($scan.engines -contains "sast")) {
+                    $uri = "$($conn.baseUri)/api/sast-metadata/$($scan.id)/metrics"
+                    $metrics = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers } $conn
+                    $scanObj.SastScanMetrics = [SastScanMetrics]::new($metrics)
+                }
             } 
 
             Write-Verbose "$($this.Limit) Scans Retrieved with Offset: $($this.Offset)"
@@ -1417,7 +1565,7 @@ class Scans {
     }
 
     [void] Hidden GetLastScansHash([CxOneConnection]$conn, [System.Collections.Generic.Dictionary[String, Project]]$projectsHash,
-                                   [switch] $useMainBranch, [string]$branchesCSV) {
+                                   [switch] $useMainBranch, [string]$branchesCSV, [switch]$getLanguages) {
         
         $this.Offset = 0
         $this.ScansHash= [System.Collections.Generic.DIctionary[String, Scan]]::New()
@@ -1461,7 +1609,16 @@ class Scans {
                 $scan.Add("projectId", $p.projectId)
                 $scan.Add("projectName", $p.ProjectName)
 
-                $this.ScansHash.Add($p.projectId, [Scan]::new($scan))
+                $scanObj = [Scan]::new($scan)
+                $this.ScansHash.Add($p.projectId, $scanObj)
+                if ($getLanguages -AND ($scan.engines -contains "sast")) {
+                    $uri = "$($conn.baseUri)/api/sast-metadata/$($scan.id)/metrics"
+                    try {
+                        $metrics = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers } $conn -noerror
+                        $scanObj.SastScanMetrics = [SastScanMetrics]::new($metrics) 
+                    }
+                    catch {}     
+                }        
             } 
         }
     }
