@@ -195,10 +195,10 @@ The following functions are available for this module
         Example
             $results = Get-ScanResults $conn "<scan_id>"
 
-    Get-SeverityCounters
+    Get-ScanSummaries
         Details
-            Get a hash with the severity counters for a given hash of Scans
-            Returns a hash with Key = Scan ID and Value = Severity Counter Object
+            Get a hash with the counters for a given hash of Scans
+            Returns a hash with Key = Scan ID and Value = Counters Object
         Parameters
             CxOneConnObj - Checkmarx One connection object
             scansHash - Hash of Scans to return counters for. Must be a hash as provided by call above

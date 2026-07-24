@@ -6,8 +6,8 @@
     This module has been created to simplify common tasks when scritpting for Checkmarx One
 
 .Notes   
-    Version:     9.0
-    Date:        10/07/2026
+    Version:     9.1
+    Date:        24/07/2026
     Written by:  Michael Fowler
     Contact:     michael.fowler@checkmarx.com
     
@@ -50,6 +50,7 @@
     8.1        Bug fix
     8.2        Added try catch block to handle errors on duplicate scans returned by API
     9.0        Added option to retrieve scanned languages. Only returns results where SAST engine is used
+    9.1        Added state data to counters + added try/catch blocks to handle missing scans
     
 .Description
     The following functions are available for this module
@@ -247,10 +248,10 @@
         Example
             $results = Get-ScanResults $conn "<scan_id>"
 
-    Get-SeverityCounters
+    Get-ScanSummaries
         Details
-            Get a hash with the severity counters for a given hash of Scans
-            Returns a hash with Key = Scan ID and Value = Severity Counter Object
+            Get a hash with the counters for a given hash of Scans
+            Returns a hash with Key = Scan ID and Value = Counters Object
         Parameters
             CxOneConnObj - Checkmarx One connection object
             scansHash - Hash of Scans to return counters for. Must be a hash as provided by call above
@@ -511,8 +512,8 @@ Function Get-ScanResults {
     return ([Results]::new($CxOneConnObj, $scanId, $getLanguages)).ResultsList
 }
 
-#Get the Severity Counters for the given list of scans. Returns a dictionary with key = ScanId and value = Severity Counter Object
-Function Get-SeverityCounters {
+#Get the Counters for the given list of scans. Returns a dictionary with key = ScanId and value = Counters Object
+Function Get-ScanSummaries {
     Param(
         [Parameter(Mandatory=$true)]
         [CxOneConnection]$CxOneConnObj,
@@ -521,7 +522,7 @@ Function Get-SeverityCounters {
         [System.Collections.Generic.Dictionary[String, Scan]]$ScansHash
     )
 
-    return ([SeverityCounters]::new($CxOneConnObj, $ScansHash)).SeverityCountersHash
+    return ([ScanSummaries]::new($CxOneConnObj, $ScansHash)).ScanSummariesHash
 }
 
 #endregion
@@ -1550,11 +1551,17 @@ class Scans {
 
             foreach ($scan in $json.scans) { 
                 $scanObj = [Scan]::new($scan)
-                $this.ScansHash.Add($scan.id, $scanObj)
+                
+                try { $this.ScansHash.Add($scan.id, $scanObj) }
+                catch {}
+                
                 if ($getLanguages -AND ($scan.engines -contains "sast")) {
                     $uri = "$($conn.baseUri)/api/sast-metadata/$($scan.id)/metrics"
-                    $metrics = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers } $conn
-                    $scanObj.SastScanMetrics = [SastScanMetrics]::new($metrics)
+                    try { 
+                        $metrics = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers } $conn -noerror
+                        $scanObj.SastScanMetrics = [SastScanMetrics]::new($metrics)
+                    }
+                    catch {}  
                 }
             } 
 
@@ -2011,154 +2018,290 @@ Class Results {
 
 #endregion
 #----------------------------------------------------------------------------------------------------------------------------------------------------
-#region SeverityCounters Classes
+#region ScanSummaryHash Classes
 
-class SeverityCount {
+class Severities {
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Variables
-    
-    [HashTable]$Totals  
-    [HashTable]$Sast
-    [HashTable]$Kics
-    [HashTable]$Sca
-    [HashTable]$Packages
-    [HashTable]$Api
-    [HashTable]$SSCS  
-    [HashTable]$Containers
-    
-    #endregion    
-    #------------------------------------------------------------------------------------------------------------------------------------------------
-    #region Hidden Variables
-        
-        [Int]$Total
-        [Int]$TotalCritical
-        [Int]$TotalHigh
-        [Int]$TotalMedium
-        [Int]$TotalLow
-        [Int]$TotalInfo
 
-    #endregion
+    [Int]$Total
+    [Int]$Critical
+    [Int]$High
+    [Int]$Medium
+    [Int]$Low
+    [Int]$Info
+
+    #endregion    
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Constructors
 
-    SeverityCount ([Array]$summary) { $this.SetVariables($summary) }
+    Severities() {}
+
+    Severities ([Array]$SeveritiesArray) { $this.SetVariables($SeveritiesArray) }
+
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Public Methods
+    
+    [void] IncrementVariables([Array]$SeveritiesArray) {
+        foreach ($sc in $SeveritiesArray) {
+            switch ($sc.severity) {
+                'CRITICAL' { 
+                    $this.Critical += $sc.counter
+                    $this.Total += $sc.counter
+                }
+                'HIGH' { 
+                    $this.High += $sc.counter
+                    $this.Total += $sc.counter
+                }
+                'MEDIUM' { 
+                    $this.Medium += $sc.counter
+                    $this.Total += $sc.counter
+                }
+                'LOW' { 
+                    $this.Low += $sc.counter
+                    $this.Total += $sc.counter
+                }
+                'INFO' { 
+                    $this.Info += $sc.counter
+                    $this.Total += $sc.counter
+                }
+            }
+        }
+    }
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Hidden Methods
+    
+    [void] Hidden SetVariables([Array]$SeveritiesArray) {
+        foreach ($sc in $SeveritiesArray) {
+            switch ($sc.severity) {
+                'CRITICAL' { 
+                    $this.Critical = $sc.counter
+                    $this.Total += $sc.counter
+                }
+                'HIGH' { 
+                    $this.High = $sc.counter
+                    $this.Total += $sc.counter
+                }
+                'MEDIUM' { 
+                    $this.Medium = $sc.counter
+                    $this.Total += $sc.counter
+                }
+                'LOW' { 
+                    $this.Low = $sc.counter
+                    $this.Total += $sc.counter
+                }
+                'INFO' { 
+                    $this.Info = $sc.counter
+                    $this.Total += $sc.counter
+                }
+            }
+        }
+    }
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+}
+
+class States {
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Variables
+
+    [Int]$ToVerify
+    [Int]$Confirmed
+    [Int]$Urgent
+    [Int]$NotExploitable
+    [Int]$ProposedNotExploitable
+
+    #endregion    
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Constructors
+
+    States() {}
+
+    States ([Array]$StatesArray) { $this.SetVariables($StatesArray) }
 
     #endregion
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Hidden Methods
     
-    [void] Hidden SetVariables([Array]$summary) {
-                
-        $this.Sast = $this.CreateHashAndIncrementTotal($summary.sastCounters.totalCounter)    
-        $this.SetCounts($summary.sastCounters.severityCounters, $this.Sast)
-
-        $this.Kics = $this.CreateHashAndIncrementTotal($summary.kicsCounters.totalCounter) 
-        $this.SetCounts($summary.kicsCounters.severityCounters, $this.Kics)
-
-        $this.Sca = $this.CreateHashAndIncrementTotal($summary.scaCounters.totalCounter)
-        $this.SetCounts($summary.scaCounters.severityCounters, $this.Sca)
-        
-        $this.Packages = $this.CreateHashAndIncrementTotal($summary.scaPackagesCounters.totalCounter)
-        if ($summary.scaPackagesCounters.totalPackagesCounter) { 
-            $this.Packages.Add("Total Packages", $summary.scaPackagesCounters.totalPackagesCounter)
-        }
-        else { $this.Packages.Add("Total Packages", $null) }
-        if ($summary.scaPackagesCounters.outdatedCounter) {
-            $this.Packages.Add("Outdated Packages", $summary.scaPackagesCounters.outdatedCounter)
-        }
-        else { $this.Packages.Add("Outdated Packages", $null) }
-        $this.SetCounts($summary.scaPackagesCounters.severityCounters, $this.Packages)
-
-        $this.Api = $this.CreateHashAndIncrementTotal($summary.apiSecCounters.totalCounter)
-        $this.SetCounts($summary.apiSecCounters.severityCounters, $this.Api)
-
-        $this.SSCS = $this.CreateHashAndIncrementTotal($summary.microEnginesCounters.totalCounter)
-        $this.SetCounts($summary.microEnginesCounters.severityCounters, $this.SSCS)
-
-        $this.Containers = $this.CreateHashAndIncrementTotal($summary.containersCounters.totalCounter)
-        $this.SetCounts($summary.containersCounters.severityCounters, $this.Containers)
-
-        $this.Totals = @{
-            total = $this.Total
-            Critical = $this.TotalCritical
-            High = $this.TotalHigh
-            Medium = $this.TotalMedium
-            Low = $this.TotalLow
-            Info = $this.TotalInfo
-        }
-    }
-
-    [Hashtable] Hidden CreateHashAndIncrementTotal ( [Nullable[System.Int32]] $totalCount) { 
-        $this.Total += $totalCount
-        if ($totalCount -eq 0) { $totalCount = $null }
-            return @{ 
-                total = $totalCount
-                Critical = $null
-                High = $null
-                Medium = $null
-                Low = $null
-                Info = $null
-        }
-    }
-
-    [void] Hidden SetCounts([Array]$severityCounter, [Hashtable]$hash) {
-        foreach ($sc in $severityCounter) {
-            switch ($sc.severity) {
-                'CRITICAL' { 
-                    $hash.Critical = $sc.counter
-                    $this.TotalCritical += $sc.counter
+    [void] IncrementVariables([Array]$StatesArray) {
+        foreach ($sc in $StatesArray) {
+            switch ($sc.state) {
+                'PROPOSED_NOT_EXPLOITABLE' { 
+                    $this.ProposedNotExploitable += $sc.counter
                 }
-                'HIGH' { 
-                    $hash.High = $sc.counter
-                    $this.TotalHigh += $sc.counter
+                'CONFIRMED' { 
+                    $this.Confirmed += $sc.counter
                 }
-                'MEDIUM' { 
-                    $hash.Medium = $sc.counter
-                    $this.TotalMedium += $sc.counter
+                'NOT_EXPLOITABLE' { 
+                    $this.NotExploitable += $sc.counter
                 }
-                'LOW' { 
-                    $hash.Low = $sc.counter
-                    $this.TotalLow += $sc.counter
+                'TO_VERIFY' { 
+                    $this.ToVerify += $sc.counter
                 }
-                'INFO' { 
-                    $hash.Info = $sc.counter
-                    $this.TotalInfo += $sc.counter
+                'URGENT' { 
+                    $this.Urgent += $sc.counter
                 }
             }
         }
+    }
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Hidden Methods
+    
+    [void] Hidden SetVariables([Array]$StatesArray) {
+        foreach ($sc in $StatesArray) {
+            switch ($sc.state) {
+                'PROPOSED_NOT_EXPLOITABLE' { 
+                    $this.ProposedNotExploitable = $sc.counter
+                }
+                'CONFIRMED' { 
+                    $this.Confirmed = $sc.counter
+                }
+                'NOT_EXPLOITABLE' { 
+                    $this.NotExploitable = $sc.counter
+                }
+                'TO_VERIFY' { 
+                    $this.ToVerify = $sc.counter
+                }
+                'URGENT' { 
+                    $this.Urgent = $sc.counter
+                }
+            }
+        }
+    }
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+}
+
+class Counters {
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Variables
+    
+    [Severities]$Severities  
+    [States]$States
+    
+    #endregion    
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Constructors
+
+    Counters () { 
+        $this.Severities = [Severities]::New()
+        $this.States = [States]::New()
+    }
+    
+    Counters ([Array]$stateCounters, [Array]$severityCounters) { $this.SetVariables($stateCounters, $severityCounters) }
+
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Public Methods
+
+    [void] IncrementVariables([Array]$stateCounters, [Array]$severityCounters) {
+            
+        $this.Severities.IncrementVariables($severityCounters)
+        $this.States.IncrementVariables($stateCounters)
+    }
+    
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------   
+    #region Hidden Methods
+    
+    [void] Hidden SetVariables([Array]$stateCounters, [Array]$severityCounters) {
+            
+        $this.Severities = [Severities]::New($severityCounters)
+        $this.States = [States]::New($stateCounters)
     }
 
     #endregion
     #------------------------------------------------------------------------------------------------------------------------------------------------
 }
 
-class SeverityCounters {
+class ScanSummary {
+
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Variables
 
-    [System.Collections.Generic.Dictionary[String, SeverityCount]]$SeverityCountersHash
+    [Counters]$Totals
+    [Counters]$Sast
+    [Counters]$Kics
+    [Counters]$Sca
+    [Counters]$Packages
+    [Counters]$Api
+    [Counters]$SSCS  
+    [Counters]$Containers
+
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Constructors
+
+    ScanSummary () { }
+    
+    ScanSummary ([Array]$summary) { $this.SetVariables($summary) }
+    
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Hidden Methods
+
+    [void] Hidden SetVariables([Array]$summary) {
+
+        $this.totals = [Counters]::New()
+
+        $this.Sast = [Counters]::New($summary.sastCounters.stateCounters, $summary.sastCounters.severityCounters)
+        $this.Totals.IncrementVariables($summary.sastCounters.stateCounters, $summary.sastCounters.severityCounters)
+
+        $this.Kics = [Counters]::New($summary.kicsCounters.stateCounters, $summary.kicsCounters.severityCounters)
+        $this.Totals.IncrementVariables($summary.kicsCounters.stateCounters, $summary.kicsCounters.severityCounters)
+
+        $this.Sca = [Counters]::New($summary.scaCounters.stateCounters, $summary.scaCounters.severityCounters)
+        $this.Totals.IncrementVariables($summary.scaCounters.stateCounters, $summary.scaCounters.severityCounters)
+
+        $this.Packages = [Counters]::New($summary.scaPackagesCounters.stateCounters, $summary.scaPackagesCounters.severityCounters)
+        $this.Totals.IncrementVariables($summary.scaPackagesCounters.stateCounters, $summary.scaPackagesCounters.severityCounters)
+
+        $this.Api = [Counters]::New($summary.apiSecCounters.stateCounters, $summary.apiSecCounters.severityCounters)
+        $this.Totals.IncrementVariables($summary.apiSecCounters.stateCounters, $summary.apiSecCounters.severityCounters)
+
+        $this.SSCS = [Counters]::New($summary.microEnginesCounters.stateCounters, $summary.microEnginesCounters.severityCounters)
+        $this.Totals.IncrementVariables($summary.microEnginesCounters.stateCounters, $summary.microEnginesCounters.severityCounters)
+
+        $this.Containers = [Counters]::New($summary.containersCounters.stateCounters, $summary.containersCounters.severityCounters)
+        $this.Totals.IncrementVariables($summary.containersCounters.stateCounters, $summary.containersCounters.severityCounters)
+        
+    }
+    
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+
+}
+
+class ScanSummaries {
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Variables
+
+    [System.Collections.Generic.Dictionary[String, ScanSummary]]$ScanSummariesHash
 
     #endregion
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Constructors
 
     #Get All Results 
-    SeverityCounters([CxOneConnection]$conn, [System.Collections.Generic.Dictionary[String, Scan]]$ScansHash) { 
-        $this.GetSeverityCountersHash($conn, $ScansHash) 
+    ScanSummaries([CxOneConnection]$conn, [System.Collections.Generic.Dictionary[String, Scan]]$ScansHash) { 
+        $this.GetScanSummaryHash($conn, $ScansHash) 
     }
     
     #endregion
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Hidden Methods
 
-    Hidden [void] GetSeverityCountersHash([CxOneConnection]$conn, [System.Collections.Generic.Dictionary[String, Scan]]$ScansHash) {
+    Hidden [void] GetScanSummaryHash([CxOneConnection]$conn, [System.Collections.Generic.Dictionary[String, Scan]]$ScansHash) {
 
-        $this.SeverityCountersHash = [System.Collections.Generic.Dictionary[String, SeverityCount]]::New()
+        $this.ScanSummariesHash = [System.Collections.Generic.Dictionary[String, ScanSummary]]::New()
         
         foreach ($scan in $ScansHash.values) {    
             $uri = "$($conn.BaseURI)/api/scan-summary/?scan-ids=$($scan.ScanID)"
             $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn
-            $this.SeverityCountersHash.Add($scan.ScanID, [SeverityCount]::new($response.scansSummaries))
+            $this.ScanSummariesHash.Add($scan.ScanID, [ScanSummary]::new($response.scansSummaries))
         }
     }
 
