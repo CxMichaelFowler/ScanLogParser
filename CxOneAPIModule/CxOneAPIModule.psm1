@@ -51,6 +51,7 @@
     8.2        Added try catch block to handle errors on duplicate scans returned by API
     9.0        Added option to retrieve scanned languages. Only returns results where SAST engine is used
     9.1        Added state data to counters + added try/catch blocks to handle missing scans
+    9.2        Catch error when scan summary does not exist
     
 .Description
     The following functions are available for this module
@@ -2300,8 +2301,11 @@ class ScanSummaries {
         
         foreach ($scan in $ScansHash.values) {    
             $uri = "$($conn.BaseURI)/api/scan-summary/?scan-ids=$($scan.ScanID)"
-            $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn
-            $this.ScanSummariesHash.Add($scan.ScanID, [ScanSummary]::new($response.scansSummaries))
+            try {
+                $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn -noerror
+                $this.ScanSummariesHash.Add($scan.ScanID, [ScanSummary]::new($response.scansSummaries))
+            }
+            catch { $this.ScanSummariesHash.Add($scan.ScanID, [ScanSummary]::new()) }
         }
     }
 
